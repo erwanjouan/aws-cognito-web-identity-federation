@@ -1,0 +1,147 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: learn.cantrill.io WEBIDF Demo
+Parameters:
+  labss3contentbucket:
+    Description: Bucket for labs s3 content
+    Type: String
+    Default: cl-labs-s3content
+Resources:
+  WebAppCDN:
+    DependsOn: StaticWebsiteBucket
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: 'true'
+        DefaultCacheBehavior:
+          ForwardedValues:
+            QueryString: 'true'
+          TargetOriginId: StaticWebsiteBucket
+          ViewerProtocolPolicy: https-only
+        DefaultRootObject: index.html
+        Origins:
+          - DomainName: !GetAtt StaticWebsiteBucket.DomainName
+            Id: "StaticWebsiteBucket"
+            S3OriginConfig: 
+              OriginAccessIdentity: ""
+  SourcePrivateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders: ['*']
+              AllowedMethods: ['GET', 'HEAD']
+              AllowedOrigins: ['*']
+  StaticWebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+  StaticWebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref StaticWebsiteBucket
+                - /*
+      Bucket: !Ref StaticWebsiteBucket
+
+  # User Pool should be allowed to list private bucket
+
+  CognitoId:
+    Properties:
+      "AllowUnauthenticatedIdentities": false
+      "SupportedLoginProviders": { "accounts.google.com": "815946762465-tr5feev965dqrntrbf8qs93sbjpnlp9b.apps.googleusercontent.com" }
+    Type: AWS::Cognito::IdentityPool
+
+  IamRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition: { "ForAnyValue:StringLike": { "cognito-identity.amazonaws.com:amr": "authenticated" },  "StringEquals": { "cognito-identity.amazonaws.com:aud": !Ref CognitoId } }
+            Principal:
+              Federated:
+                - "cognito-identity.amazonaws.com"
+      Path: "/"
+      "Policies":
+        - PolicyName: main
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "cloudformation:CreateStack"
+                  - "cloudformation:UpdateStack"
+                  - "cloudformation:DeleteStack"
+                  - "cloudformation:CreateUploadBucket"
+                  - "cloudformation:DescribeStacks"
+                  - "cloudformation:DescribeStackEvents"
+                  - "cloudformation:GetTemplateSummary"
+                  - "cloudformation:ListStacks"
+                  - "cloudformation:ListStackResources"
+                  - "s3:CreateBucket"
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "mobileanalytics:PutEvent"
+                  - "cognito-sync:*"
+                  - "cognito-identity:*"
+                Resource: "*"
+    Type: AWS::IAM::Role
+
+  IdentityPoolRoleAttachment:
+    Properties:
+      IdentityPoolId: !Ref CognitoId
+      Roles: { "authenticated": !GetAtt IamRole.Arn }
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+
+  SourcePrivateBucketPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Permissions to List contents of the privatepatches bucket
+      ManagedPolicyName: "PrivatePatchesPermissions"
+      Path: /
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - 
+            Sid: ReadFromPrivateBucket
+            Effect: Allow
+            Action:
+              - "s3:ListBucket"
+              - "s3:GetObject"
+            Resource:
+              - !Sub "arn:aws:s3:::${SourcePrivateBucket}"
+              - !Sub "arn:aws:s3:::${SourcePrivateBucket}/*"
+Outputs:
+  WebsiteURL:
+    Value: !GetAtt 
+      - StaticWebsiteBucket
+      - WebsiteURL
+    Description: URL for website hosted on S3
+  S3BucketSecureURL:
+    Value: !Join 
+      - ''
+      - - 'https://'
+        - !GetAtt 
+          - StaticWebsiteBucket
+          - DomainName
+    Description: app bucket URL

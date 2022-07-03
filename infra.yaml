@@ -63,7 +63,7 @@ Resources:
 
   # User Pool should be allowed to list private bucket
 
-  CognitoId:
+  CognitoIdentityPool:
     Properties:
       "AllowUnauthenticatedIdentities": false
       "SupportedLoginProviders": { "accounts.google.com": "815946762465-tr5feev965dqrntrbf8qs93sbjpnlp9b.apps.googleusercontent.com" }
@@ -77,7 +77,7 @@ Resources:
           - Effect: "Allow"
             Action:
               - "sts:AssumeRoleWithWebIdentity"
-            Condition: { "ForAnyValue:StringLike": { "cognito-identity.amazonaws.com:amr": "authenticated" },  "StringEquals": { "cognito-identity.amazonaws.com:aud": !Ref CognitoId } }
+            Condition: { "ForAnyValue:StringLike": { "cognito-identity.amazonaws.com:amr": "authenticated" },  "StringEquals": { "cognito-identity.amazonaws.com:aud": !Ref CognitoIdentityPool } }
             Principal:
               Federated:
                 - "cognito-identity.amazonaws.com"
@@ -109,7 +109,7 @@ Resources:
 
   IdentityPoolRoleAttachment:
     Properties:
-      IdentityPoolId: !Ref CognitoId
+      IdentityPoolId: !Ref CognitoIdentityPool
       Roles: { "authenticated": !GetAtt IamRole.Arn }
     Type: AWS::Cognito::IdentityPoolRoleAttachment
 
@@ -117,7 +117,7 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       Description: Permissions to List contents of the privatepatches bucket
-      ManagedPolicyName: "PrivatePatchesPermissions"
+      ManagedPolicyName: PrivateBucketPermissions
       Path: /
       PolicyDocument:
         Version: 2012-10-17

@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: learn.cantrill.io WEBIDF Demo
+Description: Cognito Identity Pool inspired from learn.cantrill.io
 Parameters:
   labss3contentbucket:
     Description: Bucket for labs s3 content
